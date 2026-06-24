@@ -1,0 +1,453 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>双双的星球 🌙</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{overflow:hidden;background:#000;font-family:'PingFang SC','Microsoft YaHei',sans-serif}
+#loading{position:fixed;inset:0;z-index:100;display:flex;flex-direction:column;align-items:center;justify-content:center;background:radial-gradient(ellipse at center,#1a1040,#0a0a1a);transition:opacity 1s}
+#loading.hidden{opacity:0;visibility:hidden;pointer-events:none}
+#loading h1{font-size:2em;color:#E8C8F0;text-shadow:0 0 20px rgba(200,150,220,.5);margin-bottom:6px}
+#loading p{color:#B8A8D0;margin-bottom:18px}
+.loader-bar{width:200px;height:4px;background:rgba(255,255,255,.2);border-radius:2px;overflow:hidden}
+.loader-fill{height:100%;width:0;background:linear-gradient(90deg,#CE93D8,#E8C060,#F2B5C1);border-radius:2px}
+
+#welcome{position:fixed;inset:0;z-index:20;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.6)}
+#welcome>div{background:rgba(30,20,50,.95);border-radius:20px;padding:30px 42px;text-align:center;box-shadow:0 0 40px rgba(180,130,220,.3);border:1px solid rgba(200,160,230,.3)}
+#welcome h2{color:#E8C8F0;margin-bottom:6px}
+#welcome p{color:#B8A8D0;font-size:14px;line-height:1.6;margin-bottom:16px}
+#welcome button{padding:12px 36px;font-size:16px;cursor:pointer;border:none;border-radius:25px;background:linear-gradient(135deg,#CE93D8,#7E57C2);color:#fff;font-weight:bold}
+
+#hud{position:fixed;bottom:30px;left:50%;transform:translateX(-50%);z-index:10;pointer-events:none;transition:opacity .5s;text-align:center}
+#hud.locked{opacity:1}#hud.unlocked{opacity:.5}
+.hint-text{color:rgba(255,255,255,.5);font-size:12px;line-height:1.5}
+.hint-text span{color:#E8C060}
+#interact-hint{position:fixed;top:50%;left:50%;transform:translate(-50%,-80px);color:#E8C060;font-size:15px;font-weight:bold;text-shadow:0 0 12px rgba(0,0,0,.8);pointer-events:none;opacity:0;transition:opacity .25s;z-index:15}
+#interact-hint.show{opacity:1}
+
+#diary-panel{position:fixed;inset:0;z-index:50;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.6);opacity:0;visibility:hidden;transition:opacity .35s}
+#diary-panel.open{opacity:1;visibility:visible}
+.diary-box{width:min(680px,95vw);max-height:85vh;background:linear-gradient(160deg,#2a1a3a,#1a1030);border-radius:20px;box-shadow:0 20px 60px rgba(0,0,0,.5);overflow:hidden;display:flex;border:1px solid rgba(180,140,220,.2)}
+.diary-left{flex:1;padding:24px 20px;display:flex;flex-direction:column;gap:10px}
+.diary-left h3{color:#E8C8F0;font-size:1.1em}
+.diary-date{color:#B8A8D0;font-size:13px;padding:5px 10px;background:rgba(255,255,255,.05);border-radius:8px;text-align:center}
+.diary-textarea{flex:1;min-height:120px;border:1px solid rgba(180,140,220,.3);border-radius:12px;padding:14px;font-size:15px;line-height:1.7;resize:none;outline:none;font-family:inherit;background:rgba(255,255,255,.05);color:#E0D8F0}
+.diary-textarea:focus{border-color:#CE93D8}
+.diary-textarea::placeholder{color:#6a5a7a}
+.btn-row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.btn{padding:8px 18px;border-radius:22px;border:none;font-size:13px;font-weight:bold;cursor:pointer;font-family:inherit}
+.btn-save{background:linear-gradient(135deg,#CE93D8,#7E57C2);color:#FFF}
+.btn-out{background:rgba(255,255,255,.08);color:#B8A8D0;border:1px solid rgba(180,140,220,.2)}
+.btn-out:hover{background:rgba(255,255,255,.15)}
+.btn-close{width:32px;height:32px;border-radius:50%;background:rgba(255,255,255,.08);border:1px solid rgba(180,140,220,.2);font-size:17px;cursor:pointer;color:#B8A8D0}
+.diary-right{width:240px;padding:18px 14px;overflow-y:auto;background:rgba(255,255,255,.03)}
+.diary-right h3{color:#C8B8E0;font-size:1em;margin-bottom:6px}
+.entry-card{background:rgba(255,255,255,.05);border-radius:10px;padding:10px;cursor:pointer;margin-bottom:6px;border:1px solid rgba(180,140,220,.1);font-size:12px;position:relative}
+.entry-card:hover{border-color:#CE93D8}
+.entry-card .ec-date{color:#8a7a9a;font-size:10px;margin-top:2px}
+.entry-card .ec-text{color:#C8B8E0;margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+canvas{display:block}
+</style>
+</head>
+<body>
+
+<div id="loading"><h1>🌙 双双的星球</h1><p>星光正在洒落...</p><div class="loader-bar"><div class="loader-fill" id="loader-fill"></div></div></div>
+
+<div id="welcome"><div>
+<h2>🌙 欢迎来到你的星球</h2>
+<p>WASD 漫步 · 鼠标环顾 · 走到桌旁按 E 写日记</p>
+<button onclick="event.stopPropagation();document.getElementById('welcome').style.display='none'">✨ 进入星球</button>
+</div></div>
+
+<div id="hud" class="unlocked"><div class="hint-text"><span>WASD</span> 漫步 · <span>鼠标</span> 环顾 · 靠近书桌按<span>E</span> · <span>ESC</span> 释放</div></div>
+<div id="interact-hint"></div>
+
+<div id="diary-panel">
+<div class="diary-box">
+<div class="diary-left">
+<div style="display:flex;justify-content:space-between;align-items:center"><h3>🌙 双双的日记</h3><button class="btn-close" id="d-close">✕</button></div>
+<div class="diary-date" id="d-date"></div>
+<textarea class="diary-textarea" id="d-text" placeholder="今天在星球上..."></textarea>
+<div class="btn-row">
+<button class="btn btn-save" id="d-save">💾 保存</button>
+<button class="btn btn-out" id="d-new">➕ 新建</button>
+<button class="btn btn-out" id="d-sync">🔄 同步</button>
+<button class="btn btn-out" id="d-del" style="color:#E57373;display:none">🗑️ 删除</button>
+</div></div>
+<div class="diary-right"><h3>📚 过往日记</h3><div id="d-list"><p style="color:#6a5a7a;font-size:13px;text-align:center;padding:30px 0">还没有日记 ✨</p></div></div>
+</div></div>
+
+<script>
+document.addEventListener('click',function(){
+  var w=document.getElementById('welcome');
+  if(w&&w.style.display!=='none')return;
+  var c=document.querySelector('canvas');
+  if(c){c.requestPointerLock=c.requestPointerLock||c.mozRequestPointerLock||c.webkitRequestPointerLock;c.requestPointerLock()}
+});
+</script>
+
+<script type="importmap">
+{"imports":{"three":"https://unpkg.com/three@0.160.0/build/three.module.js","three/addons/":"https://unpkg.com/three@0.160.0/examples/jsm/"}}
+</script>
+
+<script type="module">
+import * as THREE from 'three';
+
+// 星空背景
+function createStarBG(){
+  var c=document.createElement('canvas');c.width=1024;c.height=1024;
+  var ctx=c.getContext('2d');
+  var g=ctx.createRadialGradient(512,512,0,512,512,700);
+  g.addColorStop(0,'#0d0d2a');g.addColorStop(0.5,'#0a0a20');g.addColorStop(1,'#050515');
+  ctx.fillStyle=g;ctx.fillRect(0,0,1024,1024);
+  for(var i=0;i<500;i++){
+    var x=Math.random()*1024,y=Math.random()*1024,r=0.3+Math.random()*1.5;
+    var alpha=0.3+Math.random()*0.7;
+    ctx.fillStyle='rgba(255,255,'+(220+Math.random()*35)+','+alpha+')';
+    ctx.beginPath();ctx.arc(x,y,r,0,Math.PI*2);ctx.fill();
+  }
+  for(var i=0;i<20;i++){
+    ctx.fillStyle='rgba(255,255,255,0.9)';
+    ctx.beginPath();ctx.arc(Math.random()*1024,Math.random()*900,1+Math.random()*1.5,0,Math.PI*2);ctx.fill();
+    // 十字光芒
+    var sx=Math.random()*1024,sy=Math.random()*900;
+    ctx.strokeStyle='rgba(255,255,255,0.2)';ctx.lineWidth=0.5;
+    ctx.beginPath();ctx.moveTo(sx-5,sy);ctx.lineTo(sx+5,sy);ctx.moveTo(sx,sy-5);ctx.lineTo(sx,sy+5);ctx.stroke();
+  }
+  // 紫色星云
+  for(var i=0;i<3;i++){
+    var nx=300+Math.random()*400,ny=200+Math.random()*400;
+    var ng=ctx.createRadialGradient(nx,ny,0,nx,ny,150+Math.random()*100);
+    ng.addColorStop(0,'rgba(150,100,200,0.08)');ng.addColorStop(1,'rgba(150,100,200,0)');
+    ctx.fillStyle=ng;ctx.beginPath();ctx.arc(nx,ny,150+Math.random()*100,0,Math.PI*2);ctx.fill();
+  }
+  return new THREE.CanvasTexture(c);
+}
+
+function $(id){return document.getElementById(id)}
+function ts(){var d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')}
+function tm(){var d=new Date();return String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0')}
+
+// 场景
+var scene=new THREE.Scene();
+scene.background=new THREE.Color('#0a0a1a');
+scene.fog=new THREE.Fog('#0a0a1a',20,60);
+
+var camera=new THREE.PerspectiveCamera(70,innerWidth/innerHeight,0.3,100);
+camera.position.set(0,3.5,10);
+
+var renderer=new THREE.WebGLRenderer({antialias:true});
+renderer.setSize(innerWidth,innerHeight);
+renderer.setPixelRatio(Math.min(devicePixelRatio,2));
+renderer.shadowMap.enabled=true;
+renderer.shadowMap.type=THREE.PCFSoftShadowMap;
+renderer.toneMapping=THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure=1.2;
+document.body.appendChild(renderer.domElement);
+
+// 星空穹顶
+var starGeo=new THREE.SphereGeometry(45,32,32);
+var starMat=new THREE.MeshBasicMaterial({map:createStarBG(),side:THREE.BackSide});
+scene.add(new THREE.Mesh(starGeo,starMat));
+
+// 光照
+scene.add(new THREE.AmbientLight('#d8d0f0',0.4));
+var moonLight=new THREE.DirectionalLight('#b8c8f0',1.2);
+moonLight.position.set(10,15,5);moonLight.castShadow=true;
+moonLight.shadow.mapSize.set(1024,1024);
+moonLight.shadow.camera.near=0.5;moonLight.shadow.camera.far=60;
+moonLight.shadow.camera.left=-15;moonLight.shadow.camera.right=15;
+moonLight.shadow.camera.top=15;moonLight.shadow.camera.bottom=-15;
+scene.add(moonLight);
+// 树下暖光
+var warmLight=new THREE.PointLight('#E8C060',3,6,1);
+warmLight.position.set(0,2,0);scene.add(warmLight);
+
+// 材质
+function M(c,r,m){return new THREE.MeshStandardMaterial({color:c,roughness:r||0.5,metalness:m||0})}
+var mGround=M('#3a2a4a',0.9);
+var mGroundEdge=M('#2a1a3a',0.9);
+var mWood=M('#d0c0e0',0.5,0.1);
+var mLeaf1=M('#CE93D8',0.5);var mLeaf2=M('#E1BEE7',0.5);var mLeaf3=M('#F3E5F5',0.5);
+var mLight=M('#E8C060',0.3,0.3);
+var mDiaryC=M('#5a3a6a',0.4,0.1);var mDiaryP=M('#f5f0fa',0.6);
+var mGold=M('#E8C060',0.2,0.5);
+var mCushion=M('#7E57C2',0.7);
+var mStar=new THREE.MeshBasicMaterial({color:'#FFF',transparent:true,opacity:0.8});
+var leafMats=[mLeaf1,mLeaf2,mLeaf3];
+
+// ============ 小行星地面 ============
+var asteroidG=new THREE.Group();scene.add(asteroidG);
+
+// 主圆盘
+var discGeo=new THREE.CylinderGeometry(7,7.5,0.5,48);
+var disc=new THREE.Mesh(discGeo,mGroundEdge);disc.position.y=-0.25;disc.receiveShadow=true;asteroidG.add(disc);
+// 顶面草地
+var topGeo=new THREE.CircleGeometry(7,48);topGeo.rotateX(-Math.PI/2);
+var top=new THREE.Mesh(topGeo,mGround);top.position.y=0.01;top.receiveShadow=true;asteroidG.add(top);
+
+// 地面小坑和凸起
+for(var i=0;i<15;i++){
+  var a=Math.random()*Math.PI*2,d=2+Math.random()*4.5;
+  var crater=new THREE.Mesh(new THREE.SphereGeometry(0.2+Math.random()*0.5,6,4),mGroundEdge);
+  crater.position.set(Math.cos(a)*d,-0.1,Math.sin(a)*d);
+  crater.scale.y=0.3;asteroidG.add(crater);
+}
+
+// 边缘碎石
+for(var i=0;i<30;i++){
+  var a2=Math.random()*Math.PI*2,r2=6.5+Math.random()*1;
+  var rock=new THREE.Mesh(new THREE.IcosahedronGeometry(0.1+Math.random()*0.3,1),mGroundEdge);
+  rock.position.set(Math.cos(a2)*r2,-0.3+Math.random()*0.2,Math.sin(a2)*r2);
+  rock.rotation.set(Math.random()*Math.PI,Math.random()*Math.PI,0);
+  asteroidG.add(rock);
+}
+
+// ============ 梦幻树 ============
+var treeG=new THREE.Group();
+var trunk=new THREE.Mesh(new THREE.CylinderGeometry(0.15,0.3,4,12),mWood);trunk.position.y=2;trunk.castShadow=true;treeG.add(trunk);
+for(var i=0;i<4;i++){
+  var branch=new THREE.Mesh(new THREE.CylinderGeometry(0.06,0.1,1.5+Math.random(),8),mWood);
+  branch.position.y=2.5+i*0.5;branch.rotation.z=0.3+i*0.2;branch.rotation.y=i*1.5;branch.castShadow=true;treeG.add(branch);
+}
+for(var i=0;i<25;i++){
+  var a3=Math.random()*Math.PI*2,d3=Math.random()*2.5;
+  var y3=3+Math.random()*2.5,r3=0.5+Math.random()*1.2;
+  var cluster=new THREE.Mesh(new THREE.SphereGeometry(r3,8,6),leafMats[Math.floor(Math.random()*3)]);
+  cluster.position.set(Math.cos(a3)*d3,y3,Math.sin(a3)*d3);cluster.scale.y=0.6+Math.random()*0.3;
+  treeG.add(cluster);
+}
+// 树上发光果实
+for(var i=0;i<6;i++){
+  var fruit=new THREE.Mesh(new THREE.SphereGeometry(0.08,6,4),new THREE.MeshStandardMaterial({color:'#E8C060',roughness:0.2,emissive:'#E8C060',emissiveIntensity:0.8}));
+  var fa=Math.random()*Math.PI*2,fd=1+Math.random()*2,fy=3+Math.random()*2;
+  fruit.position.set(Math.cos(fa)*fd,fy,Math.sin(fa)*fd);treeG.add(fruit);
+}
+treeG.position.set(0,0,0);scene.add(treeG);
+
+// ============ 书桌椅 + 日记本 ============
+var deskG=new THREE.Group();
+// 圆桌
+var tableTop=new THREE.Mesh(new THREE.CylinderGeometry(0.6,0.65,0.06,16),mWood);
+tableTop.position.y=0.85;tableTop.castShadow=true;deskG.add(tableTop);
+var tableLeg=new THREE.Mesh(new THREE.CylinderGeometry(0.06,0.08,0.82,8),mWood);
+tableLeg.position.y=0.41;deskG.add(tableLeg);
+// 椅子
+var chairSeat=new THREE.Mesh(new THREE.BoxGeometry(0.7,0.08,0.7),mWood);
+chairSeat.position.set(0,0.5,-0.7);chairSeat.castShadow=true;deskG.add(chairSeat);
+var chairBack=new THREE.Mesh(new THREE.BoxGeometry(0.7,0.5,0.06),mWood);
+chairBack.position.set(0,0.75,-1.02);deskG.add(chairBack);
+// 坐垫
+var cushion=new THREE.Mesh(new THREE.BoxGeometry(0.6,0.06,0.5),mCushion);
+cushion.position.set(0,0.55,-0.65);deskG.add(cushion);
+// 椅腿
+for(var lx=-0.25;lx<=0.25;lx+=0.5){for(var lz=-0.95;lz<=-0.45;lz+=0.5){
+  deskG.add(new THREE.Mesh(new THREE.CylinderGeometry(0.03,0.04,0.45,6),mWood)).position.set(lx,0.23,lz);
+}}
+// 桌上小灯
+var lampBase=new THREE.Mesh(new THREE.CylinderGeometry(0.08,0.1,0.3,8),mGold);lampBase.position.y=0.98;deskG.add(lampBase);
+var lampGlow=new THREE.Mesh(new THREE.SphereGeometry(0.1,6,4),new THREE.MeshStandardMaterial({color:'#E8C060',roughness:0.2,emissive:'#FFD54F',emissiveIntensity:1.5}));
+lampGlow.position.y=1.2;deskG.add(lampGlow);
+deskG.position.set(0,0,-2);scene.add(deskG);
+
+// 日记本 3D
+var diary3D=new THREE.Group();
+diary3D.add(new THREE.Mesh(new THREE.BoxGeometry(0.3,0.02,0.4),mDiaryC));
+diary3D.add(new THREE.Mesh(new THREE.BoxGeometry(0.26,0.018,0.36),mDiaryP)).position.y=0.004;
+diary3D.position.set(0,0.9,-1.9);scene.add(diary3D);
+
+// ============ 地面星尘 ============
+var sparkles=[];
+var sparkGeo=new THREE.SphereGeometry(0.02,4,4);
+for(var i=0;i<40;i++){
+  var sp=new THREE.Mesh(sparkGeo,new THREE.MeshBasicMaterial({color:new THREE.Color().setHSL(0.7+Math.random()*0.3,0.6,0.6+Math.random()*0.4),transparent:true,opacity:0.7}));
+  var sa=Math.random()*Math.PI*2,sd=1+Math.random()*6;
+  sp.position.set(Math.cos(sa)*sd,0.05+Math.random()*0.3,Math.sin(sa)*sd);
+  sp.userData={baseX:sp.position.x,baseZ:sp.position.z,baseY:sp.position.y,ph:Math.random()*Math.PI*2,sp:0.3+Math.random()*1};
+  sparkles.push(sp);scene.add(sp);
+}
+
+// ============ 流星 ============
+var shootingStars=[];
+function spawnShootingStar(){
+  var g=new THREE.Group();
+  var len=2+Math.random()*4;
+  var head=new THREE.Mesh(new THREE.SphereGeometry(0.04,4,4),new THREE.MeshBasicMaterial({color:'#FFF'}));
+  g.add(head);
+  var trailGeo=new THREE.CylinderGeometry(0.01,0.03,len,6);trailGeo.rotateX(Math.PI/2);
+  var trail=new THREE.Mesh(trailGeo,new THREE.MeshBasicMaterial({color:'#FFE8D0',transparent:true,opacity:0.6}));
+  trail.position.z=len/2;g.add(trail);
+  var startAngle=Math.random()*Math.PI*2;
+  g.position.set(Math.cos(startAngle)*20,15+Math.random()*10,Math.sin(startAngle)*20);
+  g.rotation.z=0.5+Math.random()*0.5;g.rotation.y=startAngle+Math.PI/2;
+  g.userData={life:1.5+Math.random()*2,speed:8+Math.random()*12};
+  shootingStars.push(g);scene.add(g);
+}
+
+// ============ 碰撞 ============
+function clampG(pos){
+  var dist=Math.sqrt(pos.x**2+pos.z**2);
+  if(dist>6.5){var a2=Math.atan2(pos.z,pos.x);pos.x=Math.cos(a2)*6.5;pos.z=Math.sin(a2)*6.5}
+  return pos;
+}
+
+// ============ 控制 ============
+var pointerLocked=false;
+var skipMouseFrame=0;
+
+document.addEventListener('pointerlockchange',function(){
+  pointerLocked=!!document.pointerLockElement;
+  if(pointerLocked)skipMouseFrame=2;
+  if(pointerLocked){$('hud').classList.remove('unlocked');$('hud').classList.add('locked')}
+  else{$('hud').classList.remove('locked');$('hud').classList.add('unlocked')}
+});
+
+document.addEventListener('mousemove',function(e){
+  if(!pointerLocked)return;
+  if(skipMouseFrame>0){skipMouseFrame--;return}
+  camera.rotation.y-=e.movementX*0.002;
+  camera.rotation.x-=e.movementY*0.002;
+  camera.rotation.x=Math.max(-1.2,Math.min(0.5,camera.rotation.x));
+});
+
+var keys={w:0,a:0,s:0,d:0,shift:0,space:0,e:0};
+var vel=new THREE.Vector3();
+
+document.addEventListener('keydown',function(e){
+  if(e.code==='KeyW')keys.w=1;if(e.code==='KeyA')keys.a=1;if(e.code==='KeyS')keys.s=1;if(e.code==='KeyD')keys.d=1;
+  if(e.code==='ShiftLeft'||e.code==='ShiftRight')keys.shift=1;
+  if(e.code==='Space'){keys.space=1;e.preventDefault()}
+  if(e.code==='KeyE')keys.e=1;
+});
+document.addEventListener('keyup',function(e){
+  if(e.code==='KeyW')keys.w=0;if(e.code==='KeyA')keys.a=0;if(e.code==='KeyS')keys.s=0;if(e.code==='KeyD')keys.d=0;
+  if(e.code==='ShiftLeft'||e.code==='ShiftRight')keys.shift=0;
+  if(e.code==='Space')keys.space=0;if(e.code==='KeyE')keys.e=0;
+});
+
+// ============ 日记系统 ============
+var DKEY='shuang_star_diary_v1';
+var diaryData={entries:[]},entryId=null,diaryOpen=false,isNewEntry=true;
+
+function saveLocal(){localStorage.setItem(DKEY,JSON.stringify(diaryData))}
+
+function renderList(){
+  var c=$('d-list');
+  if(diaryData.entries.length===0){c.innerHTML='<p style=\"color:#6a5a7a;font-size:13px;text-align:center;padding:30px 0\">还没有日记 ✨</p>';return}
+  var html='';
+  diaryData.entries.forEach(function(e){
+    html+='<div class=\"entry-card\" data-id=\"'+e.id+'\" style=\"position:relative\"><span style=\"position:absolute;top:8px;right:10px;font-size:12px;color:#6a5a7a\">✏️</span><div class=\"ec-date\">'+e.date+' '+e.time+'</div><div class=\"ec-text\">'+e.content.slice(0,30)+(e.content.length>30?'...':'')+'</div></div>';
+  });
+  c.innerHTML=html;
+  c.querySelectorAll('.entry-card').forEach(function(cd){
+    cd.addEventListener('click',function(){
+      var e=diaryData.entries.find(function(x){return x.id===cd.dataset.id});if(!e)return;
+      entryId=e.id;isNewEntry=false;$('d-text').value=e.content;
+      $('d-date').textContent='📅 '+e.date+' '+e.time;$('d-del').style.display='inline-block';renderList();
+    });
+  });
+}
+
+function newEntry(){entryId=null;isNewEntry=true;$('d-text').value='';$('d-date').textContent='📅 '+ts()+' '+tm();$('d-del').style.display='none';renderList()}
+function openDiary(){if(diaryOpen)return;diaryOpen=true;document.exitPointerLock();newEntry();$('diary-panel').classList.add('open')}
+function closeDiary(){
+  diaryOpen=false;$('diary-panel').classList.remove('open');
+  setTimeout(function(){var c=document.querySelector('canvas');if(c){c.requestPointerLock=c.requestPointerLock||c.mozRequestPointerLock||c.webkitRequestPointerLock;c.requestPointerLock()}},200);
+}
+function deleteEntry(){
+  if(!entryId||isNewEntry)return;if(!confirm('确定删除？'))return;
+  diaryData.entries=diaryData.entries.filter(function(e){return e.id!==entryId});
+  saveLocal();renderList();newEntry();
+}
+function saveEntry(){
+  var content=$('d-text').value.trim();if(!content)return;
+  var now=new Date();var id=isNewEntry?'d'+now.getTime():entryId;
+  var entry={id:id,date:ts(),time:tm(),ts:now.getTime(),content:content};
+  var idx=diaryData.entries.findIndex(function(x){return x.id===entry.id});
+  if(idx>=0)diaryData.entries[idx]=entry;else diaryData.entries.unshift(entry);
+  diaryData.entries.sort(function(a,b){return b.ts-a.ts});
+  saveLocal();renderList();newEntry();
+  $('d-save').textContent='✅ 已保存';setTimeout(function(){$('d-save').textContent='💾 保存'},1500);
+}
+function loadDiary(){var l=localStorage.getItem(DKEY);if(l){try{diaryData=JSON.parse(l)}catch(e){diaryData={entries:[]}}}renderList()}
+
+$('d-close').addEventListener('click',closeDiary);$('d-save').addEventListener('click',saveEntry);
+$('d-new').addEventListener('click',newEntry);
+$('d-sync').addEventListener('click',function(){loadDiary();renderList()});
+$('d-del').addEventListener('click',deleteEntry);
+$('diary-panel').addEventListener('click',function(e){if(e.target===$('diary-panel'))closeDiary()});
+document.addEventListener('keydown',function(e){if(e.ctrlKey&&e.code==='KeyS'&&diaryOpen){e.preventDefault();saveEntry()}});
+
+// 日记距离检测
+function isNearDiary(){
+  var wp=new THREE.Vector3();diary3D.getWorldPosition(wp);
+  return camera.position.distanceTo(wp)<3;
+}
+
+// ============ 动画 ============
+var clock=new THREE.Clock();
+var loadP=0,eWas=false,starTimer=0;
+function animate(){
+  requestAnimationFrame(animate);
+  var dt=Math.min(clock.getDelta(),0.12),t=clock.elapsedTime;
+  if(loadP<100){loadP=Math.min(100,loadP+dt*40);$('loader-fill').style.width=loadP+'%';if(loadP>=98)setTimeout(function(){$('loading').classList.add('hidden')},500)}
+
+  // 玩家
+  if(pointerLocked&&!diaryOpen){
+    var sp=keys.shift?28:14;
+    var f=new THREE.Vector3();camera.getWorldDirection(f);f.y=0;f.normalize();
+    var r=new THREE.Vector3().crossVectors(f,new THREE.Vector3(0,1,0)).normalize();
+    if(keys.w){vel.x+=f.x*sp*dt;vel.z+=f.z*sp*dt}
+    if(keys.s){vel.x-=f.x*sp*dt;vel.z-=f.z*sp*dt}
+    if(keys.a){vel.x-=r.x*sp*dt;vel.z-=r.z*sp*dt}
+    if(keys.d){vel.x+=r.x*sp*dt;vel.z+=r.z*sp*dt}
+    vel.x*=Math.pow(0.05,dt);vel.z*=Math.pow(0.05,dt);
+    if(Math.abs(vel.x)<0.005)vel.x=0;if(Math.abs(vel.z)<0.005)vel.z=0;
+    if(keys.space&&camera.position.y<=3.55)vel.y=6;
+    vel.y-=15*dt;
+    camera.position.x+=vel.x*dt;camera.position.y+=vel.y*dt;camera.position.z+=vel.z*dt;
+    if(camera.position.y<3.5){camera.position.y=3.5;vel.y=0}
+    camera.position.copy(clampG(camera.position));
+  }
+
+  // 日记本
+  var near=isNearDiary();
+  if(near&&!diaryOpen){$('interact-hint').classList.add('show');$('interact-hint').textContent='📖 按 E 打开日记'}
+  else if(!diaryOpen)$('interact-hint').classList.remove('show');
+  if(near&&keys.e&&!eWas&&!diaryOpen){eWas=true;openDiary()}
+  if(!keys.e)eWas=false;
+
+  // 星尘闪烁
+  sparkles.forEach(function(s){
+    s.position.y=s.userData.baseY+Math.sin(t*s.userData.sp+s.userData.ph)*0.08;
+    s.material.opacity=0.4+Math.sin(t*2+s.userData.ph)*0.3;
+  });
+
+  // 流星
+  starTimer+=dt;
+  if(starTimer>3+Math.random()*8&&shootingStars.length<5){starTimer=0;spawnShootingStar()}
+  for(var i=shootingStars.length-1;i>=0;i--){
+    var ss=shootingStars[i];ss.userData.life-=dt;
+    ss.position.x-=Math.sin(ss.rotation.y)*ss.userData.speed*dt;
+    ss.position.z-=Math.cos(ss.rotation.y)*ss.userData.speed*dt;
+    ss.position.y-=ss.userData.speed*0.3*dt;
+    if(ss.userData.life<=0){scene.remove(ss);shootingStars.splice(i,1)}
+  }
+
+  // 树发光果实呼吸
+  treeG.children.forEach(function(child){
+    if(child.material&&child.material.emissiveIntensity){
+      child.material.emissiveIntensity=0.6+Math.sin(t*2+child.position.x)*0.3;
+    }
+  });
+
+  renderer.render(scene,camera)
+}
+
+window.addEventListener('resize',function(){camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();renderer.setSize(innerWidth,innerHeight)});
+animate();loadDiary();
+</script>
+</body>
+</html>
